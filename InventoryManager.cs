@@ -1,67 +1,52 @@
-using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
 
 public class InventoryManager : MonoBehaviour
 {
     public static InventoryManager Instance { get; private set; }
 
-    [Header("Referencias UI y Jugador")]
+    [Header("Referencias")]
     public GameObject playerInventoryUI;
-    public PlayerMovement playerMovement;
-    public Transform slotContainer;
-    public Transform hotbarContainer;
-    public GameObject visibleItemsContainer;
+    public PlayerMovement playerMovement; 
+    public Inventary playerInventory; 
+    public Transform hotbarContainer; // Arrastra el objeto HotBar en el Inspector
+    public GameObject VidibleItemsContainer;
+    
+    public Transform dropPoint;
 
-    public Image ghostIcon; // Arrastra el objeto GhostIcon en el Inspector
-
-    [Header("Items de Prueba (Opcional)")]
-    public ItemScriptableObject itemDev;
-    public ItemScriptableObject itemDev2;
-
-    private List<Slot> allSlots = new List<Slot>();
     private Slot[] hotBarSlots;
+    private int activeSlots = -1;
+    private PlayerStats playerStats;
     private Visibleitem[] visibleItems;
     private Visibleitem itemVisibleActivo;
-    private int activeSlotIndex = -1;
 
+    // Arreglo para mapear teclas 1-0
     private KeyCode[] hotbarKeys =
     {
         KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4, KeyCode.Alpha5, KeyCode.Alpha6,
         KeyCode.Alpha7, KeyCode.Alpha8, KeyCode.Alpha9, KeyCode.Alpha0
     };
 
-    private void Awake()
+    void Awake()
     {
         if (Instance == null) { Instance = this; }
         else { Destroy(gameObject); }
-    }
 
-    private void Start()
-    {
-        // Cargar todos los slots (Inventario Principal + Hotbar)
-        if (slotContainer != null)
-        {
-            allSlots.AddRange(slotContainer.GetComponentsInChildren<Slot>());
-        }
+        // Se obtiene el componente Inventary automáticamente del mismo GameObject
+        playerInventory = GetComponent<Inventary>();
 
         if (hotbarContainer != null)
         {
             hotBarSlots = hotbarContainer.GetComponentsInChildren<Slot>();
-            allSlots.AddRange(hotbarContainer.GetComponentsInChildren<Slot>(true));
         }
 
-        if (visibleItemsContainer != null)
+        if (VidibleItemsContainer != null)
         {
-            visibleItems = visibleItemsContainer.GetComponentsInChildren<Visibleitem>(true);
+            visibleItems = VidibleItemsContainer.GetComponentsInChildren<Visibleitem>(true);
         }
-
-        Debug.Log("Inventario inicializado con " + allSlots.Count + " slots.");
     }
 
-    private void Update()
+    void Update()
     {
-        // Teclas 1-0 para la Hotbar
         if (hotBarSlots != null)
         {
             int limite = Mathf.Min(hotBarSlots.Length, hotbarKeys.Length);
@@ -73,140 +58,119 @@ public class InventoryManager : MonoBehaviour
                 }
             }
         }
-
-        // Abrir / Cerrar Inventario con TAB
+        if (Input.GetKeyDown(KeyCode.Q))
+        {
+            SoltarItemActivo();
+        }
+        // Abrir y cerrar inventario
         if (Input.GetKeyDown(KeyCode.Tab))
         {
-            ToggleInventory();
+            playerInventoryUI.SetActive(!playerInventoryUI.activeSelf);
+
+            if (playerInventoryUI.activeSelf)
+            {
+                Cursor.visible = true;
+                Cursor.lockState = CursorLockMode.None;
+                if (playerMovement != null) playerMovement.freeze = true;
+            }
+            else
+            {
+                Cursor.visible = false;
+                Cursor.lockState = CursorLockMode.Locked;
+                if (playerMovement != null) playerMovement.freeze = false;
+            }
         }
-
-        // Teclas de prueba rápido (F1 / F2)
-        if (Input.GetKeyDown(KeyCode.F1) && itemDev != null) AddItem(itemDev, 1);
-        if (Input.GetKeyDown(KeyCode.F2) && itemDev2 != null) AddItem(itemDev2, 1);
     }
-
-    // --- LÓGICA DEL INVENTARIO ---
-
-    public int GetItemCount(ItemScriptableObject item)
+  public void SoltarItemActivo()
     {
-        int total = 0;
-        foreach (var slot in allSlots)
+        // 1. Validar que haya un slot de hotbar seleccionado
+        if (activeSlots < 0 || activeSlots >= hotBarSlots.Length)
         {
-            if (slot.ItemScriptableObject == item)
-            {
-                total += slot.Cantidad;
-            }
-        }
-        return total;
-    }
-
-    public int AddItem(ItemScriptableObject itemData, int cantidad)
-    {
-        int cantidadAGuardar = cantidad;
-
-        // 1. Apilar en slots que ya tengan el mismo ítem y espacio libre
-        for (int i = 0; i < allSlots.Count; i++)
-        {
-            if (allSlots[i].ItemScriptableObject == itemData && allSlots[i].Cantidad < itemData.maxStock)
-            {
-                int espacioDisponible = itemData.maxStock - allSlots[i].Cantidad;
-                int cantidadAAlmacenar = Mathf.Min(espacioDisponible, cantidadAGuardar);
-
-                allSlots[i].SetItem(itemData, allSlots[i].Cantidad + cantidadAAlmacenar);
-                cantidadAGuardar -= cantidadAAlmacenar;
-
-                if (cantidadAGuardar <= 0) return 0;
-            }
+            Debug.LogWarning("No has seleccionado ninguna casilla con los números 1-9.");
+            return;
         }
 
-        // 2. Si sobra, buscar slots vacíos
-        if (cantidadAGuardar > 0)
+        Slot slotActivo = hotBarSlots[activeSlots];
+
+        // 2. Verificar que el slot realmente contenga un ítem
+        if (slotActivo == null || slotActivo.ItemScriptableObject == null)
         {
-            for (int i = 0; i < allSlots.Count; i++)
-            {
-                if (allSlots[i].ItemScriptableObject == null)
-                {
-                    int cantidadAAlmacenar = Mathf.Min(itemData.maxStock, cantidadAGuardar);
-
-                    allSlots[i].SetItem(itemData, cantidadAAlmacenar);
-                    cantidadAGuardar -= cantidadAAlmacenar;
-
-                    if (cantidadAGuardar <= 0) return 0;
-                }
-            }
+            Debug.LogWarning("La casilla seleccionada está vacía.");
+            return;
         }
 
-        return cantidadAGuardar; // Retorna lo que no cupo
-    }
+        ItemScriptableObject itemASoltar = slotActivo.ItemScriptableObject;
 
-    public bool HasItem(ItemScriptableObject itemData, int cantidadRequerida)
-    {
-        int contador = 0;
-        foreach (Slot slot in allSlots)
+        // 3. Determinar posición de aparición (spawn)
+        Vector3 spawnPos = (dropPoint != null) 
+            ? dropPoint.position 
+            : (transform.position + transform.forward * 1.5f + Vector3.up * 0.5f);
+
+        // 4. Instanciar en el juego
+        if (itemASoltar.prefabObjeto != null)
         {
-            if (slot.ItemScriptableObject == itemData)
+            GameObject itemInstanciado = Instantiate(itemASoltar.prefabObjeto, spawnPos, Quaternion.identity);
+
+            // Asignar ScriptableObject y cantidad al componente AgarrarItem para que se pueda volver a recoger[cite: 2]
+            AgarrarItem agarrarComp = itemInstanciado.GetComponent<AgarrarItem>();
+            if (agarrarComp != null)
             {
-                contador += slot.Cantidad;
-                if (contador >= cantidadRequerida) return true;
+                agarrarComp.ItemScriptableObject = itemASoltar;
+                agarrarComp.cantidad = 1;
+            }
+
+            // Impulso hacia adelante si tiene Rigidbody
+            Rigidbody rb = itemInstanciado.GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                rb.AddForce(transform.forward * 3f, ForceMode.Impulse);
             }
         }
-        return false;
-    }
-
-    public void RemoveItem(ItemScriptableObject itemData, int cantidadARetirar)
-    {
-        foreach (Slot slot in allSlots)
+        else
         {
-            if (slot.ItemScriptableObject == itemData)
-            {
-                if (slot.Cantidad <= cantidadARetirar)
-                {
-                    cantidadARetirar -= slot.Cantidad;
-                    slot.ClearItem();
-                }
-                else
-                {
-                    slot.SetItem(itemData, slot.Cantidad - cantidadARetirar);
-                    cantidadARetirar = 0;
-                }
-
-                if (cantidadARetirar <= 0) break;
-            }
+            Debug.LogError("El ItemScriptableObject " + itemASoltar.nombre + " no tiene un prefabObjeto asignado en el Inspector.");
         }
-    }
 
-    // --- MANEJO DE HOTBAR Y VISUALES ---
+        // 5. Descontar del inventario/slot
+        playerInventory.RemoveItemFromSlot(slotActivo, 1);
 
-    public void UsarSlot(int index)
+        // 6. Refrescar visualmente la mano y el slot
+        UsarSlot(activeSlots);
+    }  
+public void UsarSlot(int index)
     {
         if (hotBarSlots == null || index < 0 || index >= hotBarSlots.Length) return;
         if (hotBarSlots[index] == null) return;
 
-        activeSlotIndex = index;
+        activeSlots = index;
 
+        // Desactivar el ítem que esté actualmente visible en mano
         if (itemVisibleActivo != null)
         {
-            ActivarDesactivarVisibleItem(false, itemVisibleActivo);
+            ActivarDesactivarSibleItem(false, itemVisibleActivo);
         }
 
+        // Si el slot no tiene ítem, salimos
         if (hotBarSlots[index].ItemScriptableObject == null) return;
 
+        // Obtenemos el ID del ScriptableObject
         int idBuscado = hotBarSlots[index].ItemScriptableObject.visibleItemID;
 
+        // Buscamos cuál Visibleitem coincide con ese ID
         if (visibleItems != null)
         {
             foreach (Visibleitem item in visibleItems)
             {
                 if (item != null && item.visibleItemID == idBuscado)
                 {
-                    ActivarDesactivarVisibleItem(true, item);
+                    ActivarDesactivarSibleItem(true, item);
                     break;
                 }
             }
         }
     }
 
-    private void ActivarDesactivarVisibleItem(bool estado, Visibleitem item)
+    public void ActivarDesactivarSibleItem(bool estado, Visibleitem item)
     {
         if (item == null || item.itemVisible == null) return;
 
@@ -219,22 +183,6 @@ public class InventoryManager : MonoBehaviour
         else
         {
             itemVisibleActivo = null;
-        }
-    }
-
-    private void ToggleInventory()
-    {
-        if (playerInventoryUI == null) return;
-
-        playerInventoryUI.SetActive(!playerInventoryUI.activeSelf);
-        bool estaAbierto = playerInventoryUI.activeSelf;
-
-        Cursor.visible = estaAbierto;
-        Cursor.lockState = estaAbierto ? CursorLockMode.None : CursorLockMode.Locked;
-
-        if (playerMovement != null)
-        {
-            playerMovement.freeze = estaAbierto;
         }
     }
 }
