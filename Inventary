@@ -1,0 +1,96 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+public class Inventary : MonoBehaviour
+{
+    public Transform slotcontainer;
+
+    [Header("Extra")]
+    public Transform hotbarcontainer; // solo para el player
+
+    // Esta es la variable que faltaba
+    public ItemScriptableObject itemDev; 
+    public ItemScriptableObject itemDev2; 
+    private List<Slot> slots = new List<Slot>();
+
+    void Start()
+    {
+        slots.AddRange(slotcontainer.GetComponentsInChildren<Slot>());
+      
+        if (hotbarcontainer != null)
+        {
+            slots.AddRange(hotbarcontainer.GetComponentsInChildren<Slot>(true));
+        }
+
+        Debug.Log("Inventario inicializado con " + slots.Count + " slots.");
+    }
+
+    void Update()
+    {
+       if (Input.GetKeyDown(KeyCode.F1))
+        {
+            //Añadir un item 1 en el inventario
+            AddItem(itemDev, 1);
+        }
+
+        if (Input.GetKeyDown(KeyCode.F2))
+        {
+            //Añadir un item 2 en el inventario
+            AddItem(itemDev2, 1);
+        }
+    } 
+    public bool RemoveItemFromSlot(Slot slot, int cantidad = 1)
+    {
+    if (slot == null || slot.ItemScriptableObject == null) return false;
+
+    slot.SubstraerCantidad(cantidad);
+    return true;
+    }
+    public int AddItem(ItemScriptableObject ItemScriptableObject, int Cantidad)
+    {
+        int cantidadAGuardar = Cantidad;
+        //1. Primero buscamos los slots que ya tienen el item y que no están llenos (para completar el stack )
+        for(int i = 0; i < slots.Count; i++)
+        {
+           if(slots[i].ItemScriptableObject == ItemScriptableObject && slots[i].Cantidad < ItemScriptableObject.maxStock)
+            {
+                //Si tenemos 20 piedras, el stock es de 50 y queremos sumar 10 mas de que hay 30 espacios disponibles
+                int espacioDisponible = ItemScriptableObject.maxStock - slots[i].Cantidad;
+
+                //Espacio disponible = 20 y queremos sumar 10 piedras, cantidad a almacenar es 10
+                int cantidadAAlmacenar = Mathf.Min(espacioDisponible, cantidadAGuardar);
+
+                slots[i].SetItem(ItemScriptableObject, slots[i].Cantidad + cantidadAAlmacenar);
+                cantidadAGuardar -= cantidadAAlmacenar;
+
+                if (cantidadAGuardar <= 0)
+                {
+                    return 0;
+                }
+
+             }
+       }
+       //2. Buscar slots vacios
+        if (cantidadAGuardar > 0)
+        {
+            for (int i = 0; i < slots.Count; i++)
+            {
+                if (slots[i].ItemScriptableObject == null)
+                {
+                    int cantidadAAlmacenar = Mathf.Min(ItemScriptableObject.maxStock, cantidadAGuardar);
+
+                    slots[i].SetItem(ItemScriptableObject, cantidadAAlmacenar);
+                    cantidadAGuardar -= cantidadAAlmacenar;
+
+                    if (cantidadAGuardar <= 0)
+                    {
+                        return 0;
+                    }
+                }
+            }
+        }
+
+        //3. Nos quedaron cosas
+        return cantidadAGuardar;
+    }
+}
