@@ -1,3 +1,4 @@
+using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -11,25 +12,39 @@ public class Slot : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHand
     public Image Icono;
     private TextMeshProUGUI cantidadText;
 
-    private void Awake()
+    void Start()
     {
         cantidadText = GetComponentInChildren<TextMeshProUGUI>();
     }
 
-    public void SetItem(ItemScriptableObject newItem, int nuevaCantidad)
+    public void SetItem(ItemScriptableObject ItemScriptableObject, int cantidad)
     {
-        ItemScriptableObject = newItem;
-        Cantidad = nuevaCantidad;
+        this.ItemScriptableObject = ItemScriptableObject;
+        this.Cantidad = cantidad;
 
         if (Icono != null)
         {
-            Icono.enabled = true;
-            Icono.sprite = ItemScriptableObject.Icono;
+            Icono.enabled = true; 
+            Icono.sprite = ItemScriptableObject.Icono; 
         }
 
         if (cantidadText != null)
         {
-            cantidadText.text = Cantidad > 1 ? Cantidad.ToString() : "";
+            cantidadText.text = cantidad.ToString();
+        }
+    }
+
+    public void SubstraerCantidad(int cantidadARestar)
+    {
+        Cantidad -= cantidadARestar;
+        if (Cantidad <= 0)
+        {
+            ClearItem(); // Limpia la imagen y referencias del slot
+        }
+        else
+        {
+            if (cantidadText != null)
+                cantidadText.text = Cantidad.ToString();
         }
     }
 
@@ -41,7 +56,7 @@ public class Slot : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHand
         if (Icono != null)
         {
             Icono.sprite = null;
-            Icono.enabled = false;
+            Icono.enabled = false; 
         }
 
         if (cantidadText != null)
@@ -50,8 +65,6 @@ public class Slot : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHand
         }
     }
 
-    // --- DRAG AND DROP ---
-
     public void OnBeginDrag(PointerEventData eventData)
     {
         if (ItemScriptableObject == null) return;
@@ -59,21 +72,14 @@ public class Slot : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHand
         if (cantidadText != null) cantidadText.text = "";
         if (Icono != null) Icono.enabled = false;
 
-        if (InventoryManager.Instance != null && InventoryManager.Instance.ghostIcon != null)
-        {
-            InventoryManager.Instance.ghostIcon.enabled = true;
-            InventoryManager.Instance.ghostIcon.sprite = ItemScriptableObject.Icono;
-        }
+        UIManager.Instance.ghostIcon.enabled = true;
+        UIManager.Instance.ghostIcon.sprite = ItemScriptableObject.Icono;
     }
 
     public void OnDrag(PointerEventData eventData)
     {
         if (ItemScriptableObject == null) return;
-
-        if (InventoryManager.Instance != null && InventoryManager.Instance.ghostIcon != null)
-        {
-            InventoryManager.Instance.ghostIcon.transform.position = Input.mousePosition;
-        }
+        UIManager.Instance.ghostIcon.transform.position = Input.mousePosition;
     }
 
     public void OnEndDrag(PointerEventData eventData)
@@ -81,45 +87,38 @@ public class Slot : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHand
         if (ItemScriptableObject == null) return;
 
         if (Icono != null) Icono.enabled = true;
-        if (cantidadText != null) cantidadText.text = Cantidad > 1 ? Cantidad.ToString() : "";
+        UIManager.Instance.ghostIcon.enabled = false;
+        if (cantidadText != null) cantidadText.text = Cantidad.ToString();
 
-        if (InventoryManager.Instance != null && InventoryManager.Instance.ghostIcon != null)
-        {
-            InventoryManager.Instance.ghostIcon.enabled = false;
-        }
-
-        // Intercambio con el slot destino
-        if (eventData.pointerEnter != null)
+        if (eventData.pointerEnter != null && eventData.pointerEnter.CompareTag("Slot"))
         {
             Slot slotDestino = eventData.pointerEnter.GetComponent<Slot>();
 
             if (slotDestino != null && slotDestino != this)
             {
-                // Slot vacío
+
                 if (slotDestino.ItemScriptableObject == null)
                 {
                     slotDestino.SetItem(ItemScriptableObject, Cantidad);
                     ClearItem();
-                }
-                // Mismo tipo de ítem -> intentar apilar
-                else if (slotDestino.ItemScriptableObject == ItemScriptableObject)
+                    return;
+                }                else if (slotDestino.ItemScriptableObject == ItemScriptableObject)
                 {
-                    if (slotDestino.Cantidad + Cantidad <= ItemScriptableObject.maxStock)
+                    if (slotDestino.Cantidad + Cantidad <= ItemScriptableObject.maxStock) 
                     {
                         slotDestino.SetItem(ItemScriptableObject, slotDestino.Cantidad + Cantidad);
                         ClearItem();
                     }
-                    else
+                    else //Si no pude, sumo lo que puedo
                     {
                         int cantidadAmover = ItemScriptableObject.maxStock - slotDestino.Cantidad;
                         slotDestino.SetItem(ItemScriptableObject, ItemScriptableObject.maxStock);
                         this.SetItem(ItemScriptableObject, Cantidad - cantidadAmover);
                     }
-                }
-                // Ítem diferente -> intercambiar posiciones
                 else
                 {
                     ItemScriptableObject temporalItemData = slotDestino.ItemScriptableObject;
+
                     int temporalCantidad = slotDestino.Cantidad;
 
                     slotDestino.SetItem(ItemScriptableObject, Cantidad);
