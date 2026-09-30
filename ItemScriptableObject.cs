@@ -10,4 +10,6 @@ public class ItemScriptableObject : ScriptableObject
     public int maxStock=1;
     public int visibleItemID = -1;
 
+     [Header("Mundo 3D")]
+    public GameObject prefabObjeto;
 }
